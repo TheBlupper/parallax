@@ -6,4 +6,4 @@ It takes a input a folder of images, representing the hogels of either a full or
 
 Full parallax holograms are too big to be included in this repo, if you want one to test with just contact me. Below is a demo of the viewer on a full parallax hologram:
 
-<video src="demo.mp4" controls preload></video>
+https://github.com/user-attachments/assets/90552951-887d-48e5-b561-26e22000609c
