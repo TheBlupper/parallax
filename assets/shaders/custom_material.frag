@@ -26,7 +26,6 @@ const uint PARALLAX_HALF = 0u;
 const uint PARALLAX_FULL = 1u;
 const uint INVALID_IMAGE_INDEX = 0xffffffffu;
 const float HOGEL_FOV_DEGREES = 120.0;
-const bool FLIP_Y = true;
 
 float srgb_to_linear_channel(float c) {
     if (c <= 0.04045) {
@@ -133,6 +132,7 @@ void main() {
     uint mode = CustomMaterial_config.x;
     uint grid_width = CustomMaterial_config.y;
     uint grid_height = CustomMaterial_config.z;
+    bool flip_y = CustomMaterial_config.w != 0u;
     uint tex_words_per_row = max(CustomMaterial_pixel_layout.x, 1u);
     uint tex_rows_per_layer = max(CustomMaterial_pixel_layout.y, 1u);
     uint bytes_per_layer = max(CustomMaterial_pixel_layout.z, 4u);
@@ -151,7 +151,7 @@ void main() {
     uint lookup_cell_y = 0u;
     if (mode == PARALLAX_FULL) {
         geom_cell_y = min(uint(floor(v * float(grid_height))), grid_height - 1u);
-        lookup_cell_y = FLIP_Y
+        lookup_cell_y = flip_y
             ? (grid_height - 1u - geom_cell_y)
             : geom_cell_y;
     } else if (mode != PARALLAX_HALF) {
@@ -218,13 +218,13 @@ void main() {
     uint row = 0u;
     if (mode == PARALLAX_HALF) {
         row = uint(v * float(height - 1u));
-        if (!FLIP_Y) {
+        if (!flip_y) {
             row = (height - 1u) - row;
         }
     } else {
         float vertical_index = floor(vertical_t * float(height));
         row = uint(clamp(vertical_index, 0.0, float(height - 1u)));
-        if (FLIP_Y) {
+        if (flip_y) {
             row = (height - 1u) - row;
         }
     }

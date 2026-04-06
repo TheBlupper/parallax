@@ -1,6 +1,5 @@
 use std::{
     fs,
-    io::BufReader,
     path::{Path, PathBuf},
 };
 
@@ -20,6 +19,7 @@ use bevy::{
     shader::ShaderRef,
 };
 use clap::{Parser, ValueEnum};
+use image::ImageReader;
 
 const VERTEX_SHADER_ASSET_PATH: &str = "shaders/custom_material.vert";
 const FRAGMENT_SHADER_ASSET_PATH: &str = "shaders/custom_material.frag";
@@ -55,6 +55,8 @@ struct CliArgs {
     image_directory: PathBuf,
     #[arg(long, value_enum)]
     mode: ParallaxMode,
+    #[arg(long)]
+    flip_y: bool,
     #[arg(long, value_parser = parse_positive_f32, default_value_t = 2.0)]
     plane_width: f32,
     #[arg(long, value_parser = parse_positive_f32, default_value_t = 3.0)]
@@ -114,10 +116,14 @@ struct DecodedImages {
     grid_height: u32,
 }
 
-fn is_png_path(path: &Path) -> bool {
+fn is_supported_image_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+        .is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("png")
+                || ext.eq_ignore_ascii_case("jpg")
+                || ext.eq_ignore_ascii_case("jpeg")
+        })
 }
 
 fn parse_numeric_groups(path: &Path) -> Vec<u32> {
@@ -154,7 +160,7 @@ fn push_image_data(
     image_meta: &mut Vec<ImageMetaCpu>,
 ) -> u32 {
     let image_index = image_meta.len() as u32;
-    let (width, height, decoded_rgba) = decode_png_rgba8(path);
+    let (width, height, decoded_rgba) = decode_image_rgba8(path);
     let offset_bytes = rgb_bytes.len() as u64;
 
     for rgba in decoded_rgba.chunks_exact(4) {
@@ -253,7 +259,7 @@ fn load_half_parallax_images(directory: &Path) -> DecodedImages {
     let mut ordered_paths: Vec<(u32, PathBuf)> = entries
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| is_png_path(path))
+        .filter(|path| is_supported_image_path(path))
         .filter_map(|path| {
             let groups = parse_numeric_groups(&path);
             groups.last().copied().map(|order| (order, path))
@@ -264,7 +270,7 @@ fn load_half_parallax_images(directory: &Path) -> DecodedImages {
 
     if ordered_paths.is_empty() {
         panic!(
-            "no valid .png files with trailing numeric order found in '{}'",
+            "no valid .png/.jpg/.jpeg files with trailing numeric order found in '{}'",
             directory.display()
         );
     }
@@ -302,7 +308,7 @@ fn load_full_parallax_images(directory: &Path) -> DecodedImages {
     let mut indexed_paths: Vec<(u32, u32, PathBuf)> = entries
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| is_png_path(path))
+        .filter(|path| is_supported_image_path(path))
         .filter_map(|path| {
             let groups = parse_numeric_groups(&path);
             if groups.len() < 2 {
@@ -319,7 +325,7 @@ fn load_full_parallax_images(directory: &Path) -> DecodedImages {
 
     if indexed_paths.is_empty() {
         panic!(
-            "no valid full-parallax PNGs found in '{}' (need two numeric indices: col,row)",
+            "no valid full-parallax .png/.jpg/.jpeg files found in '{}' (need two numeric indices: col,row)",
             directory.display()
         );
     }
@@ -379,54 +385,14 @@ fn load_images_for_mode(directory: &Path, mode: ParallaxMode) -> DecodedImages {
     }
 }
 
-fn decode_png_rgba8(path: &Path) -> (u32, u32, Vec<u8>) {
-    let file = std::fs::File::open(path)
-        .unwrap_or_else(|err| panic!("failed to open '{}': {err}", path.display()));
-    let mut decoder = png::Decoder::new(BufReader::new(file));
-    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-
-    let mut reader = decoder
-        .read_info()
-        .unwrap_or_else(|err| panic!("failed to parse PNG header '{}': {err}", path.display()));
-    let output_size = reader.output_buffer_size().unwrap_or_else(|| {
-        panic!(
-            "failed to determine PNG output size for '{}'",
-            path.display()
-        )
-    });
-    let mut buffer = vec![0; output_size];
-    let frame_info = reader
-        .next_frame(&mut buffer)
-        .unwrap_or_else(|err| panic!("failed to decode PNG '{}': {err}", path.display()));
-    let data = &buffer[..frame_info.buffer_size()];
-
-    let mut rgba = Vec::with_capacity((frame_info.width * frame_info.height * 4) as usize);
-    match frame_info.color_type {
-        png::ColorType::Rgba => rgba.extend_from_slice(data),
-        png::ColorType::Rgb => {
-            for rgb in data.chunks_exact(3) {
-                rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
-            }
-        }
-        png::ColorType::Grayscale => {
-            for gray in data {
-                rgba.extend_from_slice(&[*gray, *gray, *gray, 255]);
-            }
-        }
-        png::ColorType::GrayscaleAlpha => {
-            for ga in data.chunks_exact(2) {
-                rgba.extend_from_slice(&[ga[0], ga[0], ga[0], ga[1]]);
-            }
-        }
-        png::ColorType::Indexed => {
-            panic!(
-                "unexpected indexed PNG output after expansion for '{}'",
-                path.display()
-            );
-        }
-    }
-
-    (frame_info.width, frame_info.height, rgba)
+fn decode_image_rgba8(path: &Path) -> (u32, u32, Vec<u8>) {
+    let image = ImageReader::open(path)
+        .unwrap_or_else(|err| panic!("failed to open '{}': {err}", path.display()))
+        .decode()
+        .unwrap_or_else(|err| panic!("failed to decode image '{}': {err}", path.display()))
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    (width, height, image.into_raw())
 }
 
 fn setup_scene(
@@ -485,7 +451,7 @@ fn setup_scene(
                 decoded.mode.as_u32(),
                 decoded.grid_width,
                 decoded.grid_height,
-                0,
+                u32::from(cli.flip_y),
             ),
             plane_center_world: plane_center_world.extend(1.0),
             plane_normal_world: plane_normal_world.extend(0.0),

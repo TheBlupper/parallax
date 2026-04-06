@@ -6,4 +6,4 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.18.1", features = ["shader_format_glsl"] }
 clap = { version = "4.5", features = ["derive"] }
-png = "0.18"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
