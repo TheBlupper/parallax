@@ -218,7 +218,7 @@ void main() {
     uint row = 0u;
     if (mode == PARALLAX_HALF) {
         row = uint(v * float(height - 1u));
-        if (!flip_y) {
+        if (flip_y) {
             row = (height - 1u) - row;
         }
     } else {
