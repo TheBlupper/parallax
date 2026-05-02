@@ -26,6 +26,7 @@ const FRAGMENT_SHADER_ASSET_PATH: &str = "shaders/custom_material.frag";
 const INVALID_IMAGE_INDEX: u32 = u32::MAX;
 const PIXEL_TEXTURE_WORDS_PER_ROW: u32 = 4096;
 const PIXEL_TEXTURE_ROWS_PER_LAYER: u32 = 4096;
+const DEFAULT_HOGEL_FOV_DEGREES: f32 = 120.0;
 
 #[derive(Debug, Clone, Copy)]
 struct ImageMetaCpu {
@@ -61,6 +62,8 @@ struct CliArgs {
     plane_width: f32,
     #[arg(long, value_parser = parse_positive_f32, default_value_t = 3.0)]
     plane_height: f32,
+    #[arg(long, value_parser = parse_fov_degrees, default_value_t = DEFAULT_HOGEL_FOV_DEGREES)]
+    hogel_fov: f32,
 }
 
 fn parse_positive_f32(value: &str) -> Result<f32, String> {
@@ -69,6 +72,16 @@ fn parse_positive_f32(value: &str) -> Result<f32, String> {
         .map_err(|_| format!("invalid float: '{value}'"))?;
     if parsed <= 0.0 {
         return Err("must be > 0".to_string());
+    }
+    Ok(parsed)
+}
+
+fn parse_fov_degrees(value: &str) -> Result<f32, String> {
+    let parsed = value
+        .parse::<f32>()
+        .map_err(|_| format!("invalid float: '{value}'"))?;
+    if !(0.0..180.0).contains(&parsed) {
+        return Err("must be > 0 and < 180 degrees".to_string());
     }
     Ok(parsed)
 }
@@ -319,7 +332,7 @@ fn load_full_parallax_images(directory: &Path) -> DecodedImages {
             if col % 2 == 0 || row % 2 == 0 {
                 return None;
             }
-            Some((col/2, row/2, path))
+            Some((col / 2, row / 2, path))
         })
         .collect();
 
@@ -462,6 +475,7 @@ fn setup_scene(
             hogel_lookup: hogel_lookup_buffer,
             plane_size: Vec4::new(cli.plane_width, cli.plane_height, 0.0, 0.0),
             pixel_layout,
+            hogel_fov_degrees: cli.hogel_fov,
             alpha_mode: AlphaMode::Opaque,
         })),
         Transform::from_rotation(plane_rotation),
@@ -549,6 +563,8 @@ struct CustomMaterial {
     plane_size: Vec4,
     #[uniform(10)]
     pixel_layout: UVec4,
+    #[uniform(11)]
+    hogel_fov_degrees: f32,
     alpha_mode: AlphaMode,
 }
 

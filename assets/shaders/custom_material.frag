@@ -11,6 +11,7 @@ layout(set = 3, binding = 6) uniform vec4 CustomMaterial_plane_right_world;
 layout(set = 3, binding = 7) uniform vec4 CustomMaterial_plane_up_world;
 layout(set = 3, binding = 9) uniform vec4 CustomMaterial_plane_size;
 layout(set = 3, binding = 10) uniform uvec4 CustomMaterial_pixel_layout;
+layout(set = 3, binding = 11) uniform float CustomMaterial_hogel_fov_degrees;
 
 layout(std430, set = 3, binding = 2) readonly buffer CustomMaterial_image_meta {
     uvec4 image_meta[];
@@ -25,7 +26,6 @@ layout(std430, set = 3, binding = 8) readonly buffer CustomMaterial_hogel_lookup
 const uint PARALLAX_HALF = 0u;
 const uint PARALLAX_FULL = 1u;
 const uint INVALID_IMAGE_INDEX = 0xffffffffu;
-const float HOGEL_FOV_DEGREES = 120.0;
 
 float srgb_to_linear_channel(float c) {
     if (c <= 0.04045) {
@@ -203,7 +203,8 @@ void main() {
         return;
     }
 
-    float r_m_h = tan(radians(HOGEL_FOV_DEGREES) * 0.5);
+    float hogel_fov_degrees = clamp(CustomMaterial_hogel_fov_degrees, 1e-6, 179.999);
+    float r_m_h = tan(radians(hogel_fov_degrees) * 0.5);
     float hogel_aspect = max(float(width) / float(height), 1e-6);
     float r_m_v = r_m_h / hogel_aspect;
     float slope_h = -dot(view_dir, plane_right) / max(forward, 1e-6);
