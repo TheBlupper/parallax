@@ -57,6 +57,8 @@ struct CliArgs {
     #[arg(long, value_enum)]
     mode: ParallaxMode,
     #[arg(long)]
+    flip_x: bool,
+    #[arg(long)]
     flip_y: bool,
     #[arg(long, value_parser = parse_positive_f32, default_value_t = 2.0)]
     plane_width: f32,
@@ -327,12 +329,18 @@ fn load_full_parallax_images(directory: &Path) -> DecodedImages {
             if groups.len() < 2 {
                 return None;
             }
-            let col = groups[groups.len() - 2];
-            let row = groups[groups.len() - 1];
-            if col % 2 == 0 || row % 2 == 0 {
-                return None;
-            }
-            Some((col / 2, row / 2, path))
+            let (col, row) = if groups.len() == 2 {
+                (groups[0], groups[1])
+            } else if groups.len() == 4 {
+                (groups[0], groups[2])
+            } else {
+                panic!(
+                    "unexpected number of numeric groups in '{}': expected 2 or 4, got {}",
+                    path.display(),
+                    groups.len()
+                );
+            };
+            Some((col, row, path))
         })
         .collect();
 
@@ -464,7 +472,7 @@ fn setup_scene(
                 decoded.mode.as_u32(),
                 decoded.grid_width,
                 decoded.grid_height,
-                u32::from(cli.flip_y),
+                u32::from(cli.flip_x) | (u32::from(cli.flip_y) << 1),
             ),
             plane_center_world: plane_center_world.extend(1.0),
             plane_normal_world: plane_normal_world.extend(0.0),

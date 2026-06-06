@@ -132,7 +132,8 @@ void main() {
     uint mode = CustomMaterial_config.x;
     uint grid_width = CustomMaterial_config.y;
     uint grid_height = CustomMaterial_config.z;
-    bool flip_y = CustomMaterial_config.w != 0u;
+    bool flip_x = (CustomMaterial_config.w & 1u) != 0u;
+    bool flip_y = (CustomMaterial_config.w >> 1) != 0u;
     uint tex_words_per_row = max(CustomMaterial_pixel_layout.x, 1u);
     uint tex_rows_per_layer = max(CustomMaterial_pixel_layout.y, 1u);
     uint bytes_per_layer = max(CustomMaterial_pixel_layout.z, 4u);
@@ -184,8 +185,6 @@ void main() {
     vec3 plane_center = CustomMaterial_plane_center_world.xyz;
     vec3 sample_origin = plane_center;
 
-    // Evaluate viewing direction from the active hogel center.
-    // For half-parallax, there is only one hogel row, so use geometric v.
     float cell_u_center = (float(cell_x) + 0.5) / float(grid_width);
     float sample_v = (mode == PARALLAX_FULL)
         ? ((float(geom_cell_y) + 0.5) / float(grid_height))
@@ -214,22 +213,18 @@ void main() {
 
     float horizontal_index = floor(horizontal_t * float(width));
     uint column = uint(clamp(horizontal_index, 0.0, float(width - 1u)));
-    column = (width - 1u) - column;
 
     uint row = 0u;
     if (mode == PARALLAX_HALF) {
         row = uint(v * float(height - 1u));
-        if (flip_y) {
-            row = (height - 1u) - row;
-        }
     } else {
         float vertical_index = floor(vertical_t * float(height));
         row = uint(clamp(vertical_index, 0.0, float(height - 1u)));
-        if (flip_y) {
-            row = (height - 1u) - row;
-        }
     }
 
+    if (flip_x) column = (width - 1u) - column;
+    if (flip_y) row = (height - 1u) - row;
+    
     uint pixel_index = row * width + column;
     uint local_byte_offset = pixel_index * 3u;
     uint image_byte_len = width * height * 3u;
